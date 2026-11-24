@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>松東營造｜服裝尺寸統計</title>
+  <style>
+    :root { --primary: #1769aa; --bg: #f4f6f8; }
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 20px 14px;
+      background: var(--bg);
+      color: #222;
+      font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif;
+    }
+
+    main {
+      max-width: 720px;
+      margin: auto;
+      padding: 22px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px #00000012;
+    }
+
+    h1 { margin: 0 0 8px; font-size: 24px; }
+    .hint { margin: 0 0 18px; color: #666; line-height: 1.6; }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 9px;
+      margin-bottom: 16px;
+    }
+
+    .tab {
+      padding: 12px;
+      border: 1px solid #ccd2d8;
+      border-radius: 8px;
+      background: #fff;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .tab.active {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .summary {
+      margin-bottom: 10px;
+      padding: 12px;
+      border-radius: 8px;
+      background: #eef5fb;
+      line-height: 1.8;
+    }
+
+    .person {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 4px;
+      border-bottom: 1px solid #eee;
+    }
+
+    select {
+      width: 140px;
+      padding: 9px;
+      border: 1px solid #c8cdd2;
+      border-radius: 6px;
+      background: #fff;
+      font-size: 16px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .actions button {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    #submit {
+      flex: 1;
+      border: 0;
+      background: var(--primary);
+      color: #fff;
+    }
+
+    #reset {
+      border: 1px solid #ccd2d8;
+      background: #fff;
+    }
+
+    #result {
+      display: none;
+      margin-top: 20px;
+      padding: 14px;
+      border: 1px solid #b9d8b9;
+      border-radius: 8px;
+      background: #f3fbf3;
+    }
+
+    #result table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+    }
+
+    #result th,
+    #result td {
+      padding: 8px 5px;
+      border: 1px solid #d8dfd6;
+      text-align: center;
+    }
+
+    @media (max-width: 480px) {
+      main { padding: 17px 13px; }
+      select { width: 125px; }
+      #result th, #result td { padding: 7px 3px; font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>松東營造服裝尺寸統計</h1>
+    <p class="hint">點選款式後，為需要該款式的同仁選擇尺寸。完成後按「提交並下載 CSV」。</p>
+
+    <nav class="tabs" id="tabs" aria-label="服裝款式"></nav>
+    <section id="content"></section>
+
+    <div class="actions">
+      <button id="reset" type="button">全部清除</button>
+      <button id="submit" type="button">提交並下載 CSV</button>
+    </div>
+
+    <section id="result" aria-live="polite"></section>
+  </main>
+
+  <script>
+    const names = [
+      "張主任", "江副理", "趙志勇", "黃義重", "王鴻儒", "馬慶安",
+      "陳俊銘", "陳冠豪", "陳冠智", "廖俞昇", "朱柏瑄", "楊政偉",
+      "楊登吉", "林士凱", "黃毓竣", "賴達樺", "陳昀陽", "羅煜淇",
+      "張嘉汶", "詹喬筑", "劉雪貞", "廖庭緯", "陳俞碩", "郭侑明",
+      "洪弘朋", "陳俊雄", "李修賢", "盧彬"
+    ];
+
+    const styles = ["薄外套", "厚外套", "長袖", "短袖"];
+    const sizes = ["S", "L", "XL", "2XL", "3XL"];
+    const storageKey = "songdong-clothing-orders-v1";
+
+    function emptySelections() {
+      return Object.fromEntries(
+        styles.map(style => [
+          style,
+          Object.fromEntries(names.map(name => [name, ""]))
+        ])
+      );
+    }
+
+    function loadSelections() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(storageKey));
+        const result = emptySelections();
+
+        if (saved && typeof saved === "object") {
+          styles.forEach(style => {
+            names.forEach(name => {
+              const value = saved?.[style]?.[name];
+              result[style][name] = sizes.includes(value) ? value : "";
+            });
+          });
+        }
+        return result;
+      } catch {
+        return emptySelections();
+      }
+    }
+
+    let selections = loadSelections();
+    let currentStyle = styles[0];
+
+    function saveSelections() {
+      localStorage.setItem(storageKey, JSON.stringify(selections));
+    }
+
+    function getCounts(style) {
+      const counts = Object.fromEntries(sizes.map(size => [size, 0]));
+      names.forEach(name => {
+        const size = selections[style][name];
+        if (size) counts[size]++;
+      });
+      return counts;
+    }
+
+    function render() {
+      document.getElementById("tabs").innerHTML = styles.map(style => `
+        <button
+          class="tab ${style === currentStyle ? "active" : ""}"
+          type="button"
+          data-style="${style}"
+          aria-pressed="${style === currentStyle}"
+        >${style}</button>
+      `).join("");
+
+      document.querySelectorAll(".tab").forEach(button => {
+        button.addEventListener("click", () => {
+          currentStyle = button.dataset.style;
+          render();
+        });
+      });
+
+      const counts = getCounts(currentStyle);
+      const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+
+      document.getElementById("content").innerHTML = `
+        <div class="summary">
+          <strong>${currentStyle}統計</strong><br>
+          S：${counts.S}　L：${counts.L}　XL：${counts.XL}
+         　2XL：${counts["2XL"]}　3XL：${counts["3XL"]}
+          <br>已選尺寸：${total} 件
+        </div>
+        ${names.map((name, index) => `
+          <label class="person" for="size-${index}">
+            <span>${name}</span>
+            <select id="size-${index}" data-name="${name}" aria-label="${name}的${currentStyle}尺寸">
+              <option value="">不訂購／選擇尺寸</option>
+              ${sizes.map(size => `
+                <option value="${size}" ${selections[currentStyle][name] === size ? "selected" : ""}>
+                  ${size}
+                </option>
+              `).join("")}
+            </select>
+          </label>
+        `).join("")}
+      `;
+
+      document.querySelectorAll("#content select").forEach(select => {
+        select.addEventListener("change", event => {
+          selections[currentStyle][event.target.dataset.name] = event.target.value;
+          saveSelections();
+          render();
+        });
+      });
+    }
+
+    function csvCell(value) {
+      return `"${String(value).replaceAll('"', '""')}"`;
+    }
+
+    function submitAndDownload() {
+      const rows = [["公司名稱", "姓名", "款式", "尺寸"]];
+
+      styles.forEach(style => {
+        names.forEach(name => {
+          const size = selections[style][name];
+          if (size) rows.push(["松東營造", name, style, size]);
+        });
+      });
+
+      if (rows.length === 1) {
+        alert("目前尚未選擇任何尺寸，請先填寫資料。");
+        return;
+      }
+
+      const csv = "\uFEFF" + rows.map(row => row.map(csvCell).join(",")).join("\r\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "松東營造服裝尺寸統計.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+
+      showResult();
+    }
+
+    function showResult() {
+      let html = `
+        <h2>提交完成</h2>
+        <p>統計結果如下，CSV 檔案已開始下載。</p>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>款式</th>
+                ${sizes.map(size => `<th>${size}</th>`).join("")}
+                <th>合計</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+
+      styles.forEach(style => {
+        const counts = getCounts(style);
+        const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+        html += `
+          <tr>
+            <td>${style}</td>
+            ${sizes.map(size => `<td>${counts[size]}</td>`).join("")}
+            <td>${total}</td>
+          </tr>
+        `;
+      });
+
+      html += "</tbody></table></div>";
+
+      const result = document.getElementById("result");
+      result.innerHTML = html;
+      result.style.display = "block";
+      result.scrollIntoView({ behavior: "smooth" });
+    }
+
+    document.getElementById("submit").addEventListener("click", submitAndDownload);
+
+    document.getElementById("reset").addEventListener("click", () => {
+      if (!confirm("確定要清除所有已選尺寸嗎？")) return;
+      selections = emptySelections();
+      saveSelections();
+      document.getElementById("result").style.display = "none";
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>
